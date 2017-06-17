@@ -236,7 +236,7 @@ def attack(self, attacker, target):
 	if target.body is not None:
 		if self.grasp is not None:
 			target.body.take_damage(self.strength*self.grasp.force_mult+self.grasp.damage)
-			#message(attacker.name + ' attacks ' + target.name + ' with the ' + attacker.grasp.name + ' for ' + str(self.strength*self.grasp.force_mult+self.grasp.damage) + ' damage!')
+			message(attacker.name + ' attacks ' + target.name + ' with the ' + attacker.grasp.name + ' for ' + str(self.strength*self.grasp.force_mult+self.grasp.damage) + ' damage!')
 		else:
 			target.body.take_damage(self.strength)
 			message(attacker.name + ' punches ' + target.name + ' for ' + str(self.strength) + ' damage!', libtcod.red)
@@ -630,7 +630,7 @@ def player_move_or_attack(dx,dy):
 	if target is not None:
 		for limb in player.body.limbs:
 			 if limb.attack_function is not None:
-				limb.attack_function(limb, player.name, target)
+				limb.attack_function(limb, player, target)
 				
 	player.move(dx,dy)
 	fov_recompute = True
