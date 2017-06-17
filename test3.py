@@ -28,6 +28,10 @@ TORCH_RADIUS = 10
 
 LIMIT_FPS = 20
 
+FLYING_LIMB = ['<','^','>','v','<','^','>','v']
+
+
+
 color_dark_wall = libtcod.Color(0, 0, 100)
 color_light_wall = libtcod.Color(130, 110, 50)
 color_dark_ground = libtcod.Color(50, 50, 150)
@@ -137,32 +141,6 @@ class Object:
 #	COMPONENT DEFINITIONS
 #############################################################################################
 
-class Fighter:
-	def __init__(self,hp,defense,power,death_function=None):
-		self.max_hp = hp
-		self.hp = hp
-		self.defense = defense
-		self.power = power
-		self.death_function = death_function
-
-	def take_damage(self,damage):
-		if damage > 0:
-			self.hp -= damage
-		if self.hp <= 0:
-			function = self.death_function
-			if function is not None:
-				function(self.owner)
-
-
-	def attack(self,target):
-		damage = self.power - target.fighter.defense
-
-		if damage > 0:
-			print self.owner.name.capitalize() + ' attacks ' + target.name + ' for ' + str(damage)+ ' damage.'
-			target.fighter.take_damage(damage)
-		else:
-			print self.owner.name.capitalize() + ' attacks ' + target.name + ", but it has no effect!"
-
 class BasicMonster:
 	def take_turn(self):
 		monster = self.owner
@@ -198,7 +176,7 @@ class Body:
 				self.limbs[libtcod.random_get_int(0,1,5)].take_damage
 				
 class Limb:
-	def __init__(self,hp,name,strength=None,speed=None,organs=[],grasp=None,equip=None,grab_function=None,attack_function=None,take_damage=None):
+	def __init__(self,hp,name,strength=None,speed=None,organs=[],grasp=None,equip=None,grab_function=None,attack_function=None,take_damage=None, death_function=None):
 		self.name = name
 		self.max_hp = hp
 		self.hp = hp
@@ -209,6 +187,8 @@ class Limb:
 		self.grab_function = grab_function
 		self.attack_function = attack_function
 
+		self.death_function = death_function
+
 		self.organs = organs
 		
 		if len(organs):
@@ -216,14 +196,16 @@ class Limb:
 				o.owner = self.owner
 					
 	def take_damage(self,damage):
-		if damage > max_hp/2:
-			function = self.mangle_function
+#		if damage > max_hp/2:
+		if damage > 0:
+			function = self.death_function
 			if function is not None:
-				function(self.owner)
+				function(self.owner, self)
 		if self.hp <= 0:
 			d_function = self.death_function
 			if d_function is not None:
 				d_function(self.owner)
+
 	
 ##############################################################################################
 ##################			LIMB COMPONENT FUNCTIONS						##################
@@ -240,6 +222,19 @@ def attack(self, attacker, target):
 		else:
 			target.body.take_damage(self.strength)
 			message(attacker.name + ' punches ' + target.name + ' for ' + str(self.strength) + ' damage!', libtcod.red)
+			
+			
+##############################################################################################
+##################			LIMB DEATH FUNCTIONS						    ##################
+
+#just a placeholder so i can make sure people actually die in combat
+def dummydeath(monster):
+	monster.char = '%'
+	monster.color = libtcod.dark_red
+	monster.blocks = False
+	monster.body = None
+	monster.name = 'mangled corpse of a ' + monster.name
+	monster.send_to_back()
 
 				
 ##############################################################################################
@@ -447,7 +442,7 @@ def place_objects(room):
 			objects.append(item)
 			item.send_to_back()  #items appear below other objects
 			
-
+			
 ####################################################################################################
 ###		GUI SETUP
 ####################################################################################################
@@ -589,25 +584,6 @@ def render_all():
 
 #################################################################################################
 
-libtcod.sys_set_fps(LIMIT_FPS)
-
-player = create_human_at_pos(0,0,'@',libtcod.red,'casey',20,20,200)
-objects = [player]
-
-#generate the map
-make_map()
-
-fov_map = libtcod.map_new(MAP_WIDTH,MAP_HEIGHT)
-for y in range(MAP_HEIGHT):
-	for x in range(MAP_WIDTH):
-		libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
-
-
-fov_recompute = True
-
-game_state = 'playing'
-player_action = None
-
 #################################################################################################
 ###	INPUT HANDLING
 #################################################################################################
@@ -688,6 +664,25 @@ def handle_keys():
 
 mouse = libtcod.Mouse()
 key = libtcod.Key()
+
+libtcod.sys_set_fps(LIMIT_FPS)
+
+player = create_human_at_pos(0,0,'@',libtcod.red,'casey',20,20,200)
+objects = [player]
+
+#generate the map
+make_map()
+
+fov_map = libtcod.map_new(MAP_WIDTH,MAP_HEIGHT)
+for y in range(MAP_HEIGHT):
+	for x in range(MAP_WIDTH):
+		libtcod.map_set_properties(fov_map, x, y, not map[x][y].block_sight, not map[x][y].blocked)
+
+
+fov_recompute = True
+
+game_state = 'playing'
+player_action = None
 
 message('HYPOXIA PROTOTRASH',libtcod.red)
 
