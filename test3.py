@@ -12,6 +12,7 @@ PANEL_Y = SCREEN_HEIGHT - PANEL_HEIGHT
 MSG_X = BAR_WIDTH + 2
 MSG_WIDTH = SCREEN_WIDTH - BAR_WIDTH - 2
 MSG_HEIGHT = PANEL_HEIGHT - 1
+INVENTORY_WIDTH = 50
 
 MAP_WIDTH = 80
 MAP_HEIGHT = 43
@@ -85,7 +86,7 @@ class Tile:
 
 class Object:
 	#this is a generic object, anything you can see
-	def __init__(self,x,y,char,name,color,blocks=False,body=None,ai=None, mangle_function = None, death_function = None):
+	def __init__(self,x,y,char,name,color,blocks=False,body=None,item=None, mangle_function = None, death_function = None):
 		self.name = name
 		self.blocks = blocks
 		self.x = x
@@ -97,9 +98,9 @@ class Object:
 		if self.body:
 			self.body.owner = self
 
-		self.ai = ai
-		if self.ai:
-			self.ai.owner = self
+		self.item = item
+		if self.item:
+			self.item.owner = self
 
 	def move(self,dx,dy):
 		if not is_blocked(self.x+dx,self.y+dy):
@@ -312,7 +313,7 @@ class Blood:
 		self.volume = volume
 		self.pressure=pressure
 		self.effect=effect
-		
+	
 
 ##############################################################################################
 #######					INITIALIZING BODIES
@@ -336,6 +337,36 @@ def create_human_at_pos(x, y, char, color, name, strength, hp, speed, inventory=
 		#soon be determined by the brain once organs are more developed
 		return Object(x,y,char,name,color,blocks = True, body = human_body)
 		
+
+
+##############################################################################################		
+#									ITEMS
+##############################################################################################
+
+class Item:	
+	def __init__(self, use_function=None):
+		self.use_function = use_function
+
+
+	def pick_up(self, player):
+		
+		#we have to use player.body.inventory because we don't have a global inventory
+		if len(player.body.inventory) >= 26:
+			message('Your inventory is too full to pick up ' + self.owner.name + '.', libtcod.red)
+		else:
+			player.body.inventory.append(self.owner)
+			objects.remove(self.owner)
+			message('You found a ' + self.owner.name + '.', libtcod.green)
+			
+	def use(self):
+		#just call the "use_function" if it is defined
+		if self.use_function is None:
+			message('It\s useless.')
+		else:
+			if self.use_function() != 'cancelled':
+				inventory.remove(self.owner)  #destroy after use, unless it was cancelled for some reason
+
+
 ##############################################################################################
 #	MAP INITIALIZATION AND DUNGEON GENERATION
 ##############################################################################################
@@ -437,7 +468,8 @@ def place_objects(room):
 		#only place it if the tile is not blocked
 		if not is_blocked(x, y):
 			#create a healing potion
-			item = Object(x, y, '!', 'healing potion', libtcod.violet)
+			item_component = Item()
+			item = Object(x, y, '!', 'healing potion', libtcod.violet, item=item_component)
  
 			objects.append(item)
 			item.send_to_back()  #items appear below other objects
@@ -611,6 +643,51 @@ def player_move_or_attack(dx,dy):
 	player.move(dx,dy)
 	fov_recompute = True
 
+
+def menu(header, options, width):
+	if len(options) > 26: raise ValueError('Cannot have a menu with more than 26 options.')
+	header_height = libtcod.console_get_height_rect(con, 0, 0, width, SCREEN_HEIGHT, header)
+	height = len(options) + header_height
+
+	#create an off-screen console that represents the menu's window
+	window = libtcod.console_new(width, height)
+ 
+	#print the header, with auto-wrap
+	libtcod.console_set_default_foreground(window, libtcod.white)
+	libtcod.console_print_rect_ex(window, 0, 0, width, height, libtcod.BKGND_NONE, libtcod.LEFT, header)
+
+	#print all the options
+	y = header_height
+	letter_index = ord('a')
+	for option_text in options:
+		text = '(' + chr(letter_index) + ') ' + option_text
+		libtcod.console_print_ex(window, 0, y, libtcod.BKGND_NONE, libtcod.LEFT, text)
+		y += 1
+		letter_index += 1
+		
+	#blit the contents of "window" to the root console
+	x = SCREEN_WIDTH/2 - width/2
+	y = SCREEN_HEIGHT/2 - height/2
+	libtcod.console_blit(window, 0, 0, width, height, 0, x, y, 1.0, 0.7)
+
+	#present the root console to the player and wait for a key-press
+	libtcod.console_flush()
+	key = libtcod.console_wait_for_keypress(True)
+	
+	
+	
+	
+def inventory_menu(header):
+	#show a menu with each item of the inventory as an option
+	if len(player.body.inventory) == 0:
+		options = ['Inventory is empty.']
+	else:
+		options = [item.name for item in player.body.inventory]
+		index = menu(header, options, INVENTORY_WIDTH)
+
+
+
+
 def handle_keys():
 	global fov_recompute
 	global playerx, playery
@@ -658,6 +735,24 @@ def handle_keys():
         	return 'exit'  #exit game
 
 	else:
+		
+		#test for other keys
+		key_char = chr(key.c)
+ 
+		if key_char == 'g':
+		#pick up an item
+			for object in objects:  #look for an item in the player's tile
+				if object.x == player.x and object.y == player.y and object.item:
+					object.item.pick_up(player)
+					break
+		
+		if key_char == 'i':
+			#show the inventory
+			chosen_item = inventory_menu('Press the key next to an item to use it, or any other to cancel.\n')
+			if chosen_item is not None:
+				chosen_item.use()
+		
+		
 		return 'didnt-take-turn'
 
 ###################	INITIALIZE MOUSE AND KEYBOARD		#################################
