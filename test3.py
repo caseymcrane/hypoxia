@@ -118,6 +118,18 @@ class Object:
 
 		self.move(dx,dy)
 
+	def move_astar(self,target):
+		libtcod.map_new(MAP_WIDTH,MAP_HEIGHT)
+		for y1 in range(MAP_HEIGHT):
+			for x1 in range(MAP_WIDTH):
+				libtcod.map_set_properties(fov, x1, y1, not map[x1][y1].block_sight, not map[x1][y1].blocked)
+				
+		for obj in objects:
+			if obj.blocks and obj!=self and obj!=target:
+				libtcod.map_set_properties(fov,obj.x,obj.y,True,False)
+				
+				#ASTAR TUTORIAL		
+		
 	def distance_to(self, other):
 		dx = other.x - self.x
 		dy = other.y - self.y
@@ -172,9 +184,34 @@ class Body:
 	def take_damage(self,damage):
 		if damage > 0:
 			if libtcod.random_get_int(0,0,10)<7:
-				self.limbs[0].take_damage
+				self.limbs[0].take_damage(damage)
+				return self.limbs[0]
 			else:
-				self.limbs[libtcod.random_get_int(0,1,5)].take_damage
+				rng_limb = libtcod.random_get_int(0,1,5)
+				self.limbs[rng_limb].take_damage(damage)
+				return self.limbs[rng_limb]
+				
+	def move_or_attack(self,dx,dy):
+
+		# coords the player is moving/attacking towards
+		x = self.owner.x + dx
+		y = self.owner.y + dy
+
+		# try to find an attackable obj
+		target = None
+		for object in objects:
+			if object.body and object.x == x and object.y == y:
+				target = object
+				break
+
+		# attack if you found a target, otherwise move
+		if target is not None:
+			for limb in self.limbs:
+				if limb.attack_function is not None:
+					limb.attack_function(limb, self.owner, target)
+					break
+				
+		self.owner.move(dx,dy)
 				
 class Limb:
 	def __init__(self,hp,name,strength=None,speed=None,organs=[],grasp=None,equip=None,grab_function=None,attack_function=None,take_damage=None, death_function=None):
@@ -199,9 +236,10 @@ class Limb:
 	def take_damage(self,damage):
 #		if damage > max_hp/2:
 		if damage > 0:
+			self.hp -= damage
 			function = self.death_function
 			if function is not None:
-				function(self.owner, self)
+				function(self.owner)
 		if self.hp <= 0:
 			d_function = self.death_function
 			if d_function is not None:
@@ -218,11 +256,12 @@ def grab(self,obj):
 def attack(self, attacker, target):
 	if target.body is not None:
 		if self.grasp is not None:
-			target.body.take_damage(self.strength*self.grasp.force_mult+self.grasp.damage)
-			message(attacker.name + ' attacks ' + target.name + ' with the ' + attacker.grasp.name + ' for ' + str(self.strength*self.grasp.force_mult+self.grasp.damage) + ' damage!')
+			limb = target.body.take_damage(self.strength*self.grasp.force_mult+self.grasp.damage)
+			message(attacker.name + ' attacks ' + limb.name + ' with the ' + attacker.grasp.name + ' for ' + str(self.strength*self.grasp.force_mult+self.grasp.damage) + ' damage!')
 		else:
-			target.body.take_damage(self.strength)
-			message(attacker.name + ' punches ' + target.name + ' for ' + str(self.strength) + ' damage!', libtcod.red)
+			limb = target.body.take_damage(self.strength)
+			message(attacker.name + ' punches ' + limb.name + ' for ' + str(self.strength) + ' damage!', libtcod.red)
+			message('DEBUG ' + limb.name + ": " + str(limb.hp) + ' out of ' + str(limb.max_hp),libtcod.yellow)
 			
 			
 ##############################################################################################
@@ -230,35 +269,44 @@ def attack(self, attacker, target):
 
 #just a placeholder so i can make sure people actually die in combat
 def dummydeath(monster):
-	monster.char = '%'
-	monster.color = libtcod.dark_red
-	monster.blocks = False
-	monster.body = None
-	monster.name = 'mangled corpse of a ' + monster.name
-	monster.send_to_back()
+	monster.owner.char = '%'
+	monster.owner.color = libtcod.dark_red
+	monster.owner.blocks = False
+	monster.owner.name = 'mangled corpse of a ' + monster.owner.name
+	monster.owner.send_to_back()
+	monster.owner.body = None
 
 				
 ##############################################################################################
-##############						ORGANS	(experimental)						##############
+##############						ORGANS
 				
 class Brain:
-	def __init__(self,name,hp,iq,dom_hand,disposition,love,fear,contents=[]):
+	def __init__(self,name,hp,iq=None,fear=None,algo=None,strategy=None):
 		self.name = name
 		self.max_hp = hp
 		self.hp = hp
 		self.iq = iq
-		self.dom_hand = dom_hand
-		self.disposition = disposition
-		self.love = love
+		self.algo = algo
+		self.strategy = strategy
 		self.fear = fear
 		
-	def take_damage(self,damage):
-		if damage > 0:
-			self.hp -= damage
-		if self.hp <= 0:
-			function = self.death_function
-			if function is not None:
-				function(self.owner)
+	def take_turn(self):
+		if self.algo == 'A*':
+			monster = self.owner
+			if libtcod.map_is_in_fov(fov_map,monster.x,monster.y):
+				if monster.distance_to(player)>=2:
+					monster.move_astar(player)
+					
+					
+				#later on i want to change this pounce condition to somehow relate to perceived weakness or fear or something
+				elif player.body is not None:
+					for limb in monster.body.limbs:
+						if limb.attack_function is not None:
+							limb.attack_function(limb, monster, player)
+							
+							#a vicious enemy will not break, and will attack with every limb they have
+							if strategy != 'vicious':
+								break
 
 class Heart:
 	def __init__(self,hp,heal,fault):
@@ -321,21 +369,20 @@ class Blood:
 
 def create_human_at_pos(x, y, char, color, name, strength, hp, speed, inventory=[]):
 		
-		torso = Limb(3*hp/8,name + '\'s torso',strength)
-		head = Limb(hp/8 ,name + '\'s head')
-		left_arm = Limb(hp/8,name + '\'s left arm',strength,attack_function = attack)
-		right_arm = Limb(hp/8,name + '\'s right arm',strength,attack_function = attack)
-		left_leg = Limb(hp/8,name + '\'s left leg',speed)
-		right_leg = Limb(hp/8,name + '\'s right leg',speed)
+	torso = Limb(3*hp/8,name + '\'s torso',strength)
+	head = Limb(hp/8 ,name + '\'s head',death_function=dummydeath)
+	left_arm = Limb(hp/8,name + '\'s left arm',strength,attack_function = attack,death_function=dummydeath)
+	right_arm = Limb(hp/8,name + '\'s right arm',strength,attack_function = attack,death_function=dummydeath)
+	left_leg = Limb(hp/8,name + '\'s left leg',speed,death_function=dummydeath)
+	right_leg = Limb(hp/8,name + '\'s right leg',speed,death_function=dummydeath)
 		
-		#here we have the final assembled limb list. organs will form a separate list soon as well
-		limb_list = [torso,head,left_arm,right_arm,left_leg,right_leg]
-		
-		human_body = Body(limb_list, inventory)
-
-		#i've left out the ai component, not only because it's very incompetent, but because this will
-		#soon be determined by the brain once organs are more developed
-		return Object(x,y,char,name,color,blocks = True, body = human_body)
+	#here we have the final assembled limb list. organs will form a separate list soon as well
+	limb_list = [torso,head,left_arm,right_arm,left_leg,right_leg]
+	
+	human_body = Body(limb_list, inventory)
+	#i've left out the ai component, not only because it's very incompetent, but because this will
+	#soon be determined by the brain once organs are more developed
+	return Object(x,y,char,name,color,blocks = True, body = human_body)
 		
 
 
@@ -365,7 +412,7 @@ class Item:
 		else:
 			if self.use_function() != 'cancelled':
 				inventory.remove(self.owner)  #destroy after use, unless it was cancelled for some reason
-
+		
 
 ##############################################################################################
 #	MAP INITIALIZATION AND DUNGEON GENERATION
@@ -455,7 +502,7 @@ def place_objects(room):
 				break
 			else:
 
-				monster = create_human_at_pos(x,y,'F',libtcod.blue,'frankie',8,4,90)
+				monster = create_human_at_pos(x,y,'F',libtcod.blue,'frankie',8,90,90)
 
 			objects.append(monster)
 			
@@ -620,29 +667,6 @@ def render_all():
 ###	INPUT HANDLING
 #################################################################################################
 
-def player_move_or_attack(dx,dy):
-	global fov_recompute
-
-	# coords the player is moving/attacking towards
-	x = player.x + dx
-	y = player.y + dy
-
-	# try to find an attackable obj
-	target = None
-	for object in objects:
-		if object.body and object.x == x and object.y == y:
-			target = object
-			break
-
-	# attack if you found a target, otherwise move
-	if target is not None:
-		for limb in player.body.limbs:
-			 if limb.attack_function is not None:
-				limb.attack_function(limb, player, target)
-				
-	player.move(dx,dy)
-	fov_recompute = True
-
 
 def menu(header, options, width):
 	if len(options) > 26: raise ValueError('Cannot have a menu with more than 26 options.')
@@ -696,35 +720,35 @@ def handle_keys():
 	# movement and combat keys can only be used in the play state
 	if game_state == 'playing':
 		if key.vk == libtcod.KEY_UP or key.vk == libtcod.KEY_KP8:
-			player_move_or_attack(0,-1)
+			player.body.move_or_attack(0,-1)
 			fov_recompute = True
 
 		elif key.vk == libtcod.KEY_KP7:
-			player_move_or_attack(-1,-1)
+			player.body.move_or_attack(-1,-1)
 			fov_recompute = True
 
 		elif key.vk == libtcod.KEY_DOWN or key.vk == libtcod.KEY_KP2:
-			player_move_or_attack(0,1)
+			player.body.move_or_attack(0,1)
 			fov_recompute = True
 			
 		elif key.vk == libtcod.KEY_KP1:
-			player_move_or_attack(-1,1)
+			player.body.move_or_attack(-1,1)
 			fov_recompute = True
 
 		elif key.vk == libtcod.KEY_LEFT or key.vk == libtcod.KEY_KP4:
-			player_move_or_attack(-1,0)
+			player.body.move_or_attack(-1,0)
 			fov_recompute = True
 
 		elif key.vk == libtcod.KEY_KP3:
-			player_move_or_attack(1,1)
+			player.body.move_or_attack(1,1)
 			fov_recompute = True
 
 		elif key.vk == libtcod.KEY_RIGHT or key.vk == libtcod.KEY_KP6:
-			player_move_or_attack(1,0)
+			player.body.move_or_attack(1,0)
 			fov_recompute = True
 			
 		elif key.vk == libtcod.KEY_KP9:
-			player_move_or_attack(1,-1)
+			player.body.move_or_attack(1,-1)
 			fov_recompute = True
 
 	if key.vk == libtcod.KEY_ENTER and key.lalt:
