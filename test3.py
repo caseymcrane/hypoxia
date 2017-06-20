@@ -511,7 +511,7 @@ def place_objects(room):
                                 monster = create_human_at_pos(x,y,'F',libtcod.blue,'White Castle',8,90,90)
 
                         objects.append(monster)
-                        print(objects)
+                        
                         
         num_items = libtcod.random_get_int(0,0,MAX_ROOM_ITEMS)
         
@@ -560,6 +560,10 @@ def render_bar(x,y,total_width,name,value,maximum,bar_color,back_color):
         if bar_width > 0:
                 libtcod.console_rect(panel,x,y,bar_width,1,False,libtcod.BKGND_SCREEN)
 
+        '''
+        showing riley how github works
+        '''
+
         #then we add text on top for more clarity
         libtcod.console_set_default_foreground(panel, libtcod.white)
         libtcod.console_print_ex(panel,x+total_width/2,y,libtcod.BKGND_NONE, libtcod.CENTER, name + ': ' + str(value) + '/' + str(maximum))
@@ -580,7 +584,7 @@ def get_names_under_mouse():
 
         #now we join and format this list of names, and display it to the player.
         names = ', '.join(names)
-        return names.capitalize()
+        return names.title()#changes from .capitalize() to .title() 
 
 ################# DISPLAYING NAMES UNDER MOUSE
 
@@ -846,3 +850,5 @@ while not libtcod.console_is_window_closed():
                 for object in objects:
                         if object.ai:
                                 object.ai.take_turn()
+
+
