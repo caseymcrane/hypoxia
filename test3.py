@@ -23,6 +23,7 @@ MAX_ROOMS = 30
 MAX_ROOM_ITEMS = 2
 MAX_ROOM_MONSTERS = 3
 
+#field of view variables
 FOV_ALGO = 0
 FOV_LIGHT_WALLS = True
 TORCH_RADIUS = 10
@@ -38,13 +39,16 @@ color_light_wall = libtcod.Color(130, 110, 50)
 color_dark_ground = libtcod.Color(50, 50, 150)
 color_light_ground = libtcod.Color(200, 180, 50)
 
+#class for making rectangle objects to carve out rooms
 class Rect:
+
+        #constructor
         def __init__(self,x,y,w,h):
                 self.x1 = x
                 self.y1 = y
                 self.x2 = x + w
                 self.y2 = y + h
-
+                
         def center(self):
                 center_x = (self.x1 + self.x2)/2
                 center_y = (self.y1 + self.y2)/2
@@ -63,13 +67,15 @@ def create_room(room):
                         map[x][y].block_sight = False
 
 def create_h_tunnel(x1,x2,y):
-        global map
+        #commented out global map because its maybe redundant
+        #global map
         for x in range(min(x1,x2),max(x1,x2)+1):
                 map[x][y].blocked = False
                 map[x][y].block_sight = False
 
 def create_v_tunnel(y1,y2,x):
-        global map
+        #commented out global map because its maybe redundant
+        #global map
         for y in range(min(y1,y2),max(y1,y2)+1):
                 map[x][y].blocked = False
                 map[x][y].block_sight = False
