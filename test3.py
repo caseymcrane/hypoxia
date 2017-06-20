@@ -266,7 +266,7 @@ def attack(self, attacker, target):
                         message(attacker.name + ' attacks ' + limb.name + ' with the ' + attacker.grasp.name + ' for ' + str(self.strength*self.grasp.force_mult+self.grasp.damage) + ' damage!')
                 else:
                         limb = target.body.take_damage(self.strength)
-                        message(attacker.name + ' punches ' + limb.name + ' for ' + str(self.strength) + ' damage!', libtcod.red)
+                        message(attacker.name + ' opens a can of whoopass on ' + limb.name + ' for ' + str(self.strength) + ' damage!', libtcod.red)
                         message('DEBUG ' + limb.name + ": " + str(limb.hp) + ' out of ' + str(limb.max_hp),libtcod.yellow)
                         
                         
@@ -504,13 +504,14 @@ def place_objects(room):
                 x=libtcod.random_get_int(0,room.x1+1,room.x2-1)
                 y=libtcod.random_get_int(0,room.y1+1,room.y2-1)
                 if not is_blocked(x,y):
-                        if libtcod.random_get_int(0,0,100) < 60:
+                        if libtcod.random_get_int(0,0,100) < 20:
                                 break
                         else:
 
                                 monster = create_human_at_pos(x,y,'F',libtcod.blue,'White Castle',8,90,90)
 
                         objects.append(monster)
+                        print(objects)
                         
         num_items = libtcod.random_get_int(0,0,MAX_ROOM_ITEMS)
         
@@ -641,6 +642,8 @@ def render_all():
                 if object != player and libtcod.map_is_in_fov(fov_map,object.x,object.y):
                         object.draw()
                 player.draw()
+
+        
 
 ###################
 ## GUI ELEMENTS
