@@ -508,7 +508,7 @@ def place_objects(room):
                                 break
                         else:
 
-                                monster = create_human_at_pos(x,y,'F',libtcod.blue,'frankie',8,90,90)
+                                monster = create_human_at_pos(x,y,'F',libtcod.blue,'White Castle',8,90,90)
 
                         objects.append(monster)
                         
@@ -610,6 +610,7 @@ def render_all():
         global fov_map, color_dark_wall, color_light_wall
         global color_dark_ground, color_light_ground
         global fov_recompute
+        
 
         if fov_recompute:
                 fov_recompute = False
@@ -634,8 +635,10 @@ def render_all():
                                 map[x][y].explored = True
 
         #draw all objects, with the player last
+        #put the second condition of this if statement so that items and monsters don't
+        #generate until in fov
         for object in objects:
-                if object != player:
+                if object != player and libtcod.map_is_in_fov(fov_map,object.x,object.y):
                         object.draw()
                 player.draw()
 
@@ -792,7 +795,7 @@ key = libtcod.Key()
 
 libtcod.sys_set_fps(LIMIT_FPS)
 
-player = create_human_at_pos(0,0,'@',libtcod.red,'casey',20,20,200)
+player = create_human_at_pos(0,0,'@',libtcod.red,'Stone Cold E.T.',20,20,200)
 objects = [player]
 
 #generate the map
