@@ -2,38 +2,64 @@ import libtcodpy as libtcod
 import math
 import textwrap
 
+#size of the actual libtcod console.
+#all sizes are in ascii characters
 SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
 
+#the width of the status bar, which we currently don't use for anything
 BAR_WIDTH = 20
+
+#this is the height of the "panel" console, a separate libtcod console
+#that we blit onto the screen on top of the main panel, which contains
+#the message log and other GUI elements. note that PANEL_HEIGHT + MAP_HEIGHT = SCREEN_HEIGHT
+#at some point we can define this more implicitly when we put more work into the GUI
 PANEL_HEIGHT = 7
+#the y coordinate offset of the panel. we need this to know where to start drawing text and other things
 PANEL_Y = SCREEN_HEIGHT - PANEL_HEIGHT
 
+#these consts define some parameters for the message box
 MSG_X = BAR_WIDTH + 2
 MSG_WIDTH = SCREEN_WIDTH - BAR_WIDTH - 2
 MSG_HEIGHT = PANEL_HEIGHT - 1
+
+#inventory panel parameters
 INVENTORY_WIDTH = 50
 
+#these define the size of the generated map.
+#right now, this is smaller than the screen size, but if we implemented
+#a scrolling camera system or something like that, this could be as big as we want
 MAP_WIDTH = 80
 MAP_HEIGHT = 43
 
-ROOM_MAX_SIZE = 10
+#these are the lower and upper bounds on width and height for room generation
 ROOM_MIN_SIZE = 6
+ROOM_MAX_SIZE = 10
+#the maximum number of rooms the mapgen algorithm will make
 MAX_ROOMS = 30
+#the upper bounds on items and monsters that mapgen will place.
+#currently monsters are only placed in rooms, never in hallways.
 MAX_ROOM_ITEMS = 2
 MAX_ROOM_MONSTERS = 3
 
-#field of view variables
+#this determines the algorithm that libtcod uses to calculate the fov_map
+#libtcod does all this internally, so we just have to tell it what kind of
+#algorithm to use, and specify some other parameters, like whether or not walls
+#should be illuminated too, or just floors.
 FOV_ALGO = 0
 FOV_LIGHT_WALLS = True
+#this is the radius that light is projected
+#i'd like for this to be dependent on eyes instead of just being a const
 TORCH_RADIUS = 10
 
+#we want to limit the FPS pretty low to stop shit from going completely crazy
 LIMIT_FPS = 20
 
-FLYING_LIMB = ['<','^','>','v','<','^','>','v']
+#this list is the remnant of an aborted attempt to make an animation for severed limbs flying off
+#FLYING_LIMB = ['<','^','>','v','<','^','>','v']
 
-
-
+#this block defines the colors for dark floors/walls and lit floors/walls
+#i'd like to replace this with some kind of smooth falloff
 color_dark_wall = libtcod.Color(0, 0, 100)
 color_light_wall = libtcod.Color(130, 110, 50)
 color_dark_ground = libtcod.Color(50, 50, 150)
@@ -92,7 +118,7 @@ class Tile:
 
 class Object:
         #this is a generic object, anything you can see
-        def __init__(self,x,y,char,name,color,blocks=False,body=None,item=None, mangle_function = None, death_function = None):
+        def __init__(self,x,y,char,name,color,blocks=False,body=None,item=None, death_function = None):
                 self.name = name
                 self.blocks = blocks
                 self.x = x
@@ -100,6 +126,8 @@ class Object:
                 self.char = char
                 self.color = color
 
+				#this looks really weird but we need to do this so we can kind of trace back up the tree
+				#i.e. if we have a limb, we can find the body that owns it, and then we can find the object that owns the body
                 self.body = body
                 if self.body:
                         self.body.owner = self
@@ -108,15 +136,23 @@ class Object:
                 if self.item:
                         self.item.owner = self
 
+		'''
+		this moves the object by a certain number of tiles
+		it's almost always used to just incrementally move in one direction,
+		and it shouldn't be used to "teleport" and object to an arbitrary location
+		'''
         def move(self,dx,dy):
                 if not is_blocked(self.x+dx,self.y+dy):
                         self.x += dx
                         self.y += dy
 
+		'''
+		this function moves towards a pair of target coords, one tile at a time
+		'''
         def move_towards(self,target_x,target_y):
                 dx = target_x - self.x
                 dy = target_y - self.y
-                #we use squared distance instead of taking sqrt. much cheaper
+                #i'd like to try to find a way to not take sqrt
                 dist = math.sqrt(dx ** 2 + dy ** 2)
 
                 dx=int(round(dx/dist))
@@ -124,34 +160,54 @@ class Object:
 
                 self.move(dx,dy)
 
+		'''
+		UNFINISHED
+		this is an implementation of A* pathfinding for bad guys.
+		depending on what we set the target to, we can have them make a beeline for the player,
+		take cover out of sight, or do anything else. this is a very fast and versatile algo
+		UNFINISHED
+		
         def move_astar(self,target):
                 libtcod.map_new(MAP_WIDTH,MAP_HEIGHT)
                 for y1 in range(MAP_HEIGHT):
                         for x1 in range(MAP_WIDTH):
                                 libtcod.map_set_properties(fov, x1, y1, not map[x1][y1].block_sight, not map[x1][y1].blocked)
                                 
-                for obj in objects:
-                        if obj.blocks and obj!=self and obj!=target:
-                                libtcod.map_set_properties(fov,obj.x,obj.y,True,False)
+				for obj in objects:
+					if obj.blocks and obj!=self and obj!=target:
+						libtcod.map_set_properties(fov,obj.x,obj.y,True,False)
                                 
                                 #ASTAR TUTORIAL         
-                
-        def distance_to(self, other):
-                dx = other.x - self.x
-                dy = other.y - self.y
+        ''' 
+                                
+		def distance_to(self, other):
+				dx = other.x - self.x
+				dy = other.y - self.y
                 return math.sqrt(dx ** 2 + dy ** 2)
 
-        #send obj to back of the object list to help with dead monsters overlapping live ones
+		'''
+		this sends an object to the back of the objects list, so that it won't overlap other stuff.
+		i'd like to replace this with a more robust z layering system, where objects can have a layer
+		and layer 0 is drawn first, then layer 1 on top, etc.
+		'''
         def send_to_back(self):
                 global objects;
                 objects.remove(self)
                 objects.insert(0,self)
 
+		'''
+		this is where the object handles its rendering. right now it's as simple as just placing its
+		char at its location
+		'''
         def draw(self):
                 #the object basically handles its own rendering here
                 libtcod.console_set_default_foreground(con,self.color)
                 libtcod.console_put_char(con,self.x,self.y,self.char,libtcod.BKGND_NONE)
 
+		'''
+		cleanup is messy right now. currently this just has the object blank itself out so it's invisible,
+		but it's not actually removed from the objects list in this function. it'd be nice to have it be all one clean routine
+		'''
         def clear(self):
                 #handle the deletion and cleanup routine. for now just replace with whitespace
                 libtcod.console_put_char(con,self.x,self.y,' ',libtcod.BKGND_NONE)
@@ -160,18 +216,18 @@ class Object:
 #       COMPONENT DEFINITIONS
 #############################################################################################
 
-class BasicMonster:
-        def take_turn(self):
-                monster = self.owner
-                if libtcod.map_is_in_fov(fov_map,monster.x,monster.y):
-                        if monster.distance_to(player) >= 2:
-                                monster.move_towards(player.x, player.y)
+'''
+the body class is basically the heart of how the entire combat system works. it could potentially be overhauled
+or refactored into part of the object class, but it seems to be fine as it is now, even if some of the
+player.body.limb and limb.owner.organs stuff is a little unwieldy.
 
-                        elif player.fighter.hp > 0:
-                                monster.fighter.attack(player)
+basically the way it works is that body is just an abstract container for limbs, organs, blood, and your inventory
+it doesn't actually have a position, a char, a color, or any of that stuff. it derives all that stuff from the object
+it's attached to, so if you instantiate a body without tying it to an object, it's just kind of an abstract clump of data
 
-##!!!!EXPERIMENTAL NEXT GENERATION BODY SYSTEM!!!!##
-
+the body doesn't even have hp. all of that is delegated to the limbs. one possible change could be giving the body a bool
+to determine if it's alive or dead, which could be useful as the way we deal with death evolves.
+'''
 class Body:
         def __init__(self,limbs=[],organs=[],inventory=[],blood=None):
                 self.limbs = limbs
@@ -179,14 +235,23 @@ class Body:
                 self.inventory = inventory
                 self.blood = blood
                 
+                #take ownership of all the limbs in our limb list
                 if len(limbs):
                         for l in limbs:
                                 l.owner = self
                                         
+                #take ownership of all organs in our organ list.
+                #note that currently we don't actually need a heart or a brain or anything to live                        
                 if len(organs):
                         for o in organs:
                                 o.owner = self
                 
+        '''
+        since the body has no hp and is, in fact, completely abstract, we leave the taking of damage
+        to the discretion of individual limbs. right now we choose a limb at random to deal damage to, 
+        with a bias toward the torso. later on you'll be able to choose what part of their body to hit
+        and with what, dwarf fortress style
+        '''
         def take_damage(self,damage):
                 if damage > 0:
                         if libtcod.random_get_int(0,0,10)<7:
@@ -197,28 +262,76 @@ class Body:
                                 self.limbs[rng_limb].take_damage(damage)
                                 return self.limbs[rng_limb]
                                 
+        '''
+        this used to be a weird player-specific global function, but i moved it here because that was
+        stupid as fuck. it's still a little janky and as our combat system evolves, this might end up
+        completely deprecated, but it's adequate for roguelike bump attacking for now.
+        '''
         def move_or_attack(self,dx,dy):
 
                 # coords the player is moving/attacking towards
                 x = self.owner.x + dx
                 y = self.owner.y + dy
 
-                # try to find an attackable obj
+                # try to find an attackable object (i.e. one with a body)
                 target = None
                 for object in objects:
+						#is there an object where we're attacking, and does it have a body?
                         if object.body and object.x == x and object.y == y:
                                 target = object
                                 break
 
                 # attack if you found a target, otherwise move
                 if target is not None:
+						#so right now this sucks. the way it works is it just goes through your limbs,
+						#finds the first one with an attack function, and attacks.
                         for limb in self.limbs:
                                 if limb.attack_function is not None:
                                         limb.attack_function(limb, self.owner, target)
                                         break
+                
+                #hopefully this little else statement will stop you from immediately trampling body of the enemy you just killed
+                else:
+					self.owner.move(dx,dy)
                                 
-                self.owner.move(dx,dy)
-                                
+'''
+this is where all the magic happens, as far as combat is concerned. as you can see, it's a very janky proof-of-concept, 
+but it mainly works. the constructor is a nightmare but almost all of these properties are optional. below i'll go through 
+what they each mean.
+
+hp				the amount of damage this limb can take before its death function is called
+
+name			the name of this limb for both combat log purposes, and severed leg on the ground purposes
+
+strength		how "strong" this limb is. this can be used for a few things, from calculating damage in an attack function to
+				determining carrying weight or how easy it is for you to pick up large objects. i.e. it's not just for arms
+			
+speed			how "fast" this limb is. right now this does absolutely nothing, but i'd like it to determine how fast you can
+				move, or how quickly you can deliver a jab or an attack or something
+			
+organs			these are the parts inside limbs that do stuff. basically, when a limb takes damage, based on the strength of the attack
+				and some RNG, the organ(s) can take damage as well. organs are good for you and do important stuff in your body, and if they're
+				badly damaged or destroyed, you'll have bigger problems. the main goal is to make hp loss a less linear measure of your health.
+				hp represents the absolute limit of what your body parts can take before they are absolutely destroyed, but organ damage will
+				be the real killer. organs will comprise obvious things like heart, lungs, brain, etc. but also things like bones. your arm could
+				have a bone as its organ, and if that bone breaks, your arm's usability will be pretty well compromised
+			
+grasp			i couldn't think of a better name for this, but this is basically whatever this limb is holding, which can be anything from an item
+				or weapon, to maybe a grapple on an enemy's limb
+			
+equip			this is basically an equipment slot for armor or clothing or something. maybe this could be made a list, but i don't want someone
+				wearing like 5 shirts and 4 pants and 18 pairs of socks, dwarf fortress style
+			
+grab_function	this is the function the limb will use to grab stuff, both in the sense of picking up items and grappling and anything else.
+				it's how an object makes its way into the grasp variable
+				
+attack_function	this is the function the limb will use to deal damage
+
+take_damage		this dictates how the limb will take damage, how it might proliferate down to the organ level, etc
+
+death_function	this is what happens when you completely lose limb hp, and represents catastrophic structural failure. 
+				this is an arm that has been severed or pulverized, a collapsed ribcage, or a caved in skull.
+'''
 class Limb:
         def __init__(self,hp,name,strength=None,speed=None,organs=[],grasp=None,equip=None,grab_function=None,attack_function=None,take_damage=None, death_function=None):
                 self.name = name
@@ -230,35 +343,40 @@ class Limb:
                 self.equip = equip
                 self.grab_function = grab_function
                 self.attack_function = attack_function
-
                 self.death_function = death_function
-
                 self.organs = organs
                 
+                #if we have organs, take ownership of them
                 if len(organs):
                         for o in organs:
                                 o.owner = self.owner
                                         
         def take_damage(self,damage):
-#               if damage > max_hp/2:
                 if damage > 0:
                         self.hp -= damage
+                if self.hp <= 0:
                         function = self.death_function
                         if function is not None:
                                 function(self.owner)
-                if self.hp <= 0:
-                        d_function = self.death_function
-                        if d_function is not None:
-                                d_function(self.owner)
 
         
 ##############################################################################################
-##################                      LIMB COMPONENT FUNCTIONS                                                ##################
-                                
+##################                      LIMB COMPONENT FUNCTIONS
+
+'''
+this function does nothing at the moment, but i'm keeping it here as a reminder that eventually you should be able to grab stuff
+'''                                
 def grab(self,obj):
         if self.strength > obj.weight:
                 self.grasp = obj
-                        
+
+'''
+it's weird passing attacker as an argument, but this is the easiest way i've found to have our messages read "x attacks y's left arm"
+instead of "x's left arm attcks y's torso", which just reads weird.
+
+this whole function is pretty placeholder and is mainly there to test that combat kinda works. for example, damage is a constant number
+where really i'd rather it either be a random range or a dice roll
+'''                        
 def attack(self, attacker, target):
         if target.body is not None:
                 if self.grasp is not None:
@@ -271,9 +389,13 @@ def attack(self, attacker, target):
                         
                         
 ##############################################################################################
-##################                      LIMB DEATH FUNCTIONS                                                ##################
+##################                      LIMB DEATH FUNCTIONS
 
-#just a placeholder so i can make sure people actually die in combat
+'''
+this is a really shitty death function, and should be replaced ASAP with better stuff. right now, if any of your limbs loses all health,
+this guy gets called and basically just turns the enemy into mush. this was only written to check that death_function works properly,
+and it is TRASH
+'''
 def dummydeath(monster):
         monster.owner.char = '%'
         monster.owner.color = libtcod.dark_red
@@ -285,7 +407,17 @@ def dummydeath(monster):
                                 
 ##############################################################################################
 ##############                                          ORGANS
-                                
+
+'''
+this doesn't really work perfectly right now, but the idea is that enemies have brains, and their brain determines both
+the pathfinding they'll use to get to you, and the general kind of approach they'll take with you, determined by strategy
+and balanced by fear.
+
+my ultimate idea is to have every actor make a threat and friendliness assessment of every other actor they see, basically sizing them up and
+storing that information, maybe updating it if you pull a weapon or something. their strategy and mindset then dictate what they
+do with that once they enter combat. if they're more of a timid type, they might find a friendly with the biggest threat and hide behind them.
+maybe some people prey on the weak, and will try to take out low-threat stragglers, and maybe others go straight for the biggest guy in the room
+'''                                
 class Brain:
         def __init__(self,name,hp,iq=None,fear=None,algo=None,strategy=None):
                 self.name = name
@@ -296,6 +428,10 @@ class Brain:
                 self.strategy = strategy
                 self.fear = fear
                 
+        '''
+        this function is called every time you make a move. hypoxia actually runs in real time, at 20fps, but you wouldn't know it, because
+        the AI only takes a turn when you do.
+        '''
         def take_turn(self):
                 if self.algo == 'A*':
                         monster = self.owner
@@ -314,6 +450,13 @@ class Brain:
                                                         if strategy != 'vicious':
                                                                 break
 
+'''
+this is totally unfinished, and is really more of a sketch of an idea than anything else.
+the general idea was that your heart would beat and would slowly restore health to your limbs,
+but that no longer makes sense. instead, it should probably integrate with the blood system, and
+basically act as a bullseye for piercing torso attacks. i'm not even going to document the member functions
+because they're all trash and will be completely replaced
+'''
 class Heart:
         def __init__(self,hp,heal,fault):
                 self.max_hp = hp
@@ -342,8 +485,10 @@ class Heart:
                         function = self.death_function
                         if function is not None:
                                 function(self.owner)
-
-
+'''
+the big idea here is that this'll determine how far you can see, if you can see through walls like thermal vision or something, etc.
+right now, like all organs, they don't really do anything.
+'''
 class Eyes:
         def __init__(self,hp,color,vision,special):
                 self.max_hp = hp
@@ -360,6 +505,11 @@ class Eyes:
                         if function is not None:
                                 function(self.owner)
 
+'''
+this is also unfinished, but the idea is that if you lose too much blood volume you can pass out and die, and
+hard vacuum exposure is gonna mess with your blood pressure and give you ebullism or something. this'll make
+more sense once the pressure system is better defined.
+'''
 class Blood:
         def __init__(self,color,volume,pressure,effect=None):
                 self.color = color
@@ -373,22 +523,31 @@ class Blood:
 #######                                 INITIALIZING BODIES
 ##############################################################################################
 
+'''
+this was my first attempt at writing a helper function to create people. it's very quick and dirty.
+due to the limb and organ system, creating and equipping a person requires quite a bit of legwork.
+you have to instantiate all your organs and limbs, connect them all together, connect them to a body,
+then create an object that's connected to that body.
+
+pretty soon this should be scrapped in favor of a series of helper functions that can build this stuff up
+in useful chunks. making a "standard" human should be pretty easy to do.
+'''
 def create_human_at_pos(x, y, char, color, name, strength, hp, speed, inventory=[]):
                 
-        torso = Limb(3*hp/8,name + '\'s torso',strength)
-        head = Limb(hp/8 ,name + '\'s head',death_function=dummydeath)
-        left_arm = Limb(hp/8,name + '\'s left arm',strength,attack_function = attack,death_function=dummydeath)
-        right_arm = Limb(hp/8,name + '\'s right arm',strength,attack_function = attack,death_function=dummydeath)
-        left_leg = Limb(hp/8,name + '\'s left leg',speed,death_function=dummydeath)
-        right_leg = Limb(hp/8,name + '\'s right leg',speed,death_function=dummydeath)
+	torso = Limb(3*hp/8,name + '\'s torso',strength)
+	head = Limb(hp/8 ,name + '\'s head',death_function=dummydeath)
+	left_arm = Limb(hp/8,name + '\'s left arm',strength,attack_function = attack,death_function=dummydeath)
+	right_arm = Limb(hp/8,name + '\'s right arm',strength,attack_function = attack,death_function=dummydeath)
+	left_leg = Limb(hp/8,name + '\'s left leg',speed,death_function=dummydeath)
+	right_leg = Limb(hp/8,name + '\'s right leg',speed,death_function=dummydeath)
                 
-        #here we have the final assembled limb list. organs will form a separate list soon as well
-        limb_list = [torso,head,left_arm,right_arm,left_leg,right_leg]
+	#here we have the final assembled limb list. organs will form a separate list soon as well
+	limb_list = [torso,head,left_arm,right_arm,left_leg,right_leg]
         
-        human_body = Body(limb_list, inventory)
-        #i've left out the ai component, not only because it's very incompetent, but because this will
-        #soon be determined by the brain once organs are more developed
-        return Object(x,y,char,name,color,blocks = True, body = human_body)
+	human_body = Body(limb_list, inventory)
+	#i've left out the ai component, not only because it's very incompetent, but because this will
+	#soon be determined by the brain once organs are more developed
+	return Object(x,y,char,name,color,blocks = True, body = human_body)
                 
 
 
@@ -396,28 +555,40 @@ def create_human_at_pos(x, y, char, color, name, strength, hp, speed, inventory=
 #                                                                       ITEMS
 ##############################################################################################
 
+'''
+much like body, this is another sort of container. it only works when tied to an object, but it basically
+contains some kind of use function that's applied when you use the item from your inventory. that function is
+arbitrary and could do basically anything.
+'''
 class Item:     
         def __init__(self, use_function=None):
                 self.use_function = use_function
 
-
+		'''
+		we're using this pick_up function instead of the grab_function we described earlier for limbs because
+		it's simply not ready yet and this was an easier way to check that our inventory system works.
+		'''
         def pick_up(self, player):
                 
-                #we have to use player.body.inventory because we don't have a global inventory
+                #we limit inventory size to 26 because we're using letters to index them right now. maybe we
+                #can add scrolling selection or something soon
                 if len(player.body.inventory) >= 26:
                         message('Your inventory is too full to pick up ' + self.owner.name + '.', libtcod.red)
                 else:
                         player.body.inventory.append(self.owner)
                         objects.remove(self.owner)
                         message('You found a ' + self.owner.name + '.', libtcod.green)
-                        
+
+		'''
+		this calls the item's use function (if it has one) and then deletes the item. this assumes the item is consumable
+		'''					
         def use(self):
                 #just call the "use_function" if it is defined
                 if self.use_function is None:
                         message('It\s useless.')
                 else:
-                        if self.use_function() != 'cancelled':
-                                inventory.remove(self.owner)  #destroy after use, unless it was cancelled for some reason
+					if self.use_function() != 'cancelled':
+						inventory.remove(self.owner)  #destroy after use, unless it was cancelled for some reason
                 
 
 ##############################################################################################
