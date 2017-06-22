@@ -47,7 +47,8 @@ MAX_ROOM_MONSTERS = 3
 #algorithm to use, and specify some other parameters, like whether or not walls
 #should be illuminated too, or just floors.
 FOV_ALGO = 0
-FOV_LIGHT_WALLS = True
+#FOV_LIGHT_WALLS = True
+FOV_LIGHT_WALLS = False
 #this is the radius that light is projected
 #i'd like for this to be dependent on eyes instead of just being a const
 TORCH_RADIUS = 10
@@ -585,7 +586,7 @@ class Item:
         def use(self):
                 #just call the "use_function" if it is defined
                 if self.use_function is None:
-                        message('It\s useless.')
+                        message('It\'s useless.')
                 else:
 					if self.use_function() != 'cancelled':
 						inventory.remove(self.owner)  #destroy after use, unless it was cancelled for some reason
