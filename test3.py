@@ -47,8 +47,8 @@ MAX_ROOM_MONSTERS = 3
 #algorithm to use, and specify some other parameters, like whether or not walls
 #should be illuminated too, or just floors.
 FOV_ALGO = 0
-#FOV_LIGHT_WALLS = True
-FOV_LIGHT_WALLS = False
+FOV_LIGHT_WALLS = True
+
 #this is the radius that light is projected
 #i'd like for this to be dependent on eyes instead of just being a const
 TORCH_RADIUS = 10
