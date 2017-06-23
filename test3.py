@@ -106,7 +106,7 @@ def create_v_tunnel(y1,y2,x):
         for y in range(min(y1,y2),max(y1,y2)+1):
                 map[x][y].blocked = False
                 map[x][y].block_sight = False
-
+#trying to properly commit 
 class Tile:
         def __init__(self,blocked,block_sight=None):
                 self.blocked = blocked
