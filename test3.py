@@ -26,6 +26,12 @@ MAX_ROOM_MONSTERS = 3
 #field of view variables
 FOV_ALGO = 0
 FOV_LIGHT_WALLS = True
+<<<<<<< HEAD
+=======
+
+#this is the radius that light is projected
+#i'd like for this to be dependent on eyes instead of just being a const
+>>>>>>> 5befcaf9c01381975453e7ad46aa4324e3d3f803
 TORCH_RADIUS = 10
 
 LIMIT_FPS = 20
@@ -79,7 +85,7 @@ def create_v_tunnel(y1,y2,x):
         for y in range(min(y1,y2),max(y1,y2)+1):
                 map[x][y].blocked = False
                 map[x][y].block_sight = False
-
+ 
 class Tile:
         def __init__(self,blocked,block_sight=None):
                 self.blocked = blocked
@@ -414,7 +420,7 @@ class Item:
         def use(self):
                 #just call the "use_function" if it is defined
                 if self.use_function is None:
-                        message('It\s useless.')
+                        message('It\'s useless.')
                 else:
                         if self.use_function() != 'cancelled':
                                 inventory.remove(self.owner)  #destroy after use, unless it was cancelled for some reason
