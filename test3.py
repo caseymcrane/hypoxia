@@ -27,7 +27,7 @@ MAX_ROOM_MONSTERS = 3
 FOV_ALGO = 0
 FOV_LIGHT_WALLS = True
 #<<<<<<< HEAD
-=======
+#=======
 
 #this is the radius that light is projected
 #i'd like for this to be dependent on eyes instead of just being a const
