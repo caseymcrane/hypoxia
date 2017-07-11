@@ -26,12 +26,12 @@ MAX_ROOM_MONSTERS = 3
 #field of view variables
 FOV_ALGO = 0
 FOV_LIGHT_WALLS = True
-<<<<<<< HEAD
+#<<<<<<< HEAD
 =======
 
 #this is the radius that light is projected
 #i'd like for this to be dependent on eyes instead of just being a const
->>>>>>> 5befcaf9c01381975453e7ad46aa4324e3d3f803
+#>>>>>>> 5befcaf9c01381975453e7ad46aa4324e3d3f803
 TORCH_RADIUS = 10
 
 LIMIT_FPS = 20
