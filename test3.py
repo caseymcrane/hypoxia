@@ -25,7 +25,7 @@ MAX_ROOM_MONSTERS = 3
 
 #field of view variables
 FOV_ALGO = 0
-FOV_LIGHT_WALLS = True
+FOV_LIGHT_WALLS = False
 #<<<<<<< HEAD
 #=======
 
@@ -649,7 +649,10 @@ def render_all():
         #put the second condition of this if statement so that items and monsters don't
         #generate until in fov
         for object in objects:
+                
                 if object != player and libtcod.map_is_in_fov(fov_map,object.x,object.y):
+                        if player.x != object.x or player.y != object.y and object.item != Item():
+                            object.move_towards(player.x, player.y)
                         object.draw()
                 player.draw()
 
