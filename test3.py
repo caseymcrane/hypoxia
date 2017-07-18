@@ -166,9 +166,9 @@ class Object:
 #       COMPONENT DEFINITIONS
 #############################################################################################
 
-class BasicMonster:
+class BasicMonster(Object):
         def take_turn(self):
-                monster = self.owner
+                monster = self#.owner
                 if libtcod.map_is_in_fov(fov_map,monster.x,monster.y):
                         if monster.distance_to(player) >= 2:
                                 monster.move_towards(player.x, player.y)
@@ -394,7 +394,7 @@ def create_human_at_pos(x, y, char, color, name, strength, hp, speed, inventory=
         human_body = Body(limb_list, inventory)
         #i've left out the ai component, not only because it's very incompetent, but because this will
         #soon be determined by the brain once organs are more developed
-        return Object(x,y,char,name,color,blocks = True, body = human_body)
+        return BasicMonster(x,y,char,name,color,blocks = True, body = human_body)
                 
 
 
@@ -651,7 +651,7 @@ def render_all():
         for object in objects:
                 
                 if object != player and libtcod.map_is_in_fov(fov_map,object.x,object.y):
-                        if player.x != object.x or player.y != object.y and object.item != Item():
+                        if (player.x != object.x or player.y != object.y) and isinstance(object, BasicMonster):
                             object.move_towards(player.x, player.y)
                         object.draw()
                 player.draw()
@@ -857,7 +857,8 @@ while not libtcod.console_is_window_closed():
         # for now, monsters wait until the player is done to take their turn
         if game_state == 'playing' and player_action != 'didnt-take-turn':
                 for object in objects:
-                        if object.ai:
-                                object.ai.take_turn()
-
+                        #if object.ai:
+                         #       object.ai.take_turn()
+                        if isinstance(object, BasicMonster):
+                            object.take_turn()
 
